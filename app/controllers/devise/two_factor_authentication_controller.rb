@@ -12,6 +12,9 @@ class Devise::TwoFactorAuthenticationController < DeviseController
       warden.session(resource_name)[:need_two_factor_authentication] = false
       sign_in resource_name, resource, :bypass => true
       redirect_to stored_location_for(resource_name) || :root
+      #add remembered cookie
+      resource.tfa_remember!
+      cookies.signed["tfa_token"] = tfa_cookie_values(resource)
       resource.update_attribute(:second_factor_attempts_count, 0)
     else
       resource.second_factor_attempts_count += 1
@@ -27,6 +30,14 @@ class Devise::TwoFactorAuthenticationController < DeviseController
   end
 
   private
+
+    def tfa_cookie_values(resource)
+      options = { :httponly => true }
+      options.merge!(
+        :value => resource.class.serialize_tfa_cookie(resource),
+        :expires => resource.tfa_remember_expires_at
+      )
+    end
 
     def authenticate_scope!
       self.resource = send("current_#{resource_name}")
