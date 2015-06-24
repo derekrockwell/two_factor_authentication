@@ -12,24 +12,20 @@ module TwoFactorAuthentication
         def handle_two_factor_authentication
           unless devise_controller?
             Devise.mappings.keys.flatten.any? do |scope|
-              if signed_in?(scope) and warden.session(scope)[:need_two_factor_authentication]
-                if valid_tfa_cookie? && User.serialize_tfa_from_cookie(*tfa_cookie)
+            if signed_in?(scope) and warden.session(scope)[TwoFactorAuthentication::NEED_AUTHENTICATION]
+                  if valid_tfa_cookie? && User.serialize_tfa_from_cookie(*tfa_cookie)
                   return
                 else
                   handle_failed_second_factor(scope)
                 end
               end
-            end
-          end
-        end
 
-        def handle_failed_second_factor(scope)
-          if request.format.present? and request.format.html?
-            session["#{scope}_return_tor"] = request.path if request.get?
-            redirect_to two_factor_authentication_path_for(scope)
-          else
-            render nothing: true, status: :unauthorized
-          end
+      def handle_failed_second_factor(scope)
+        if request.format.present? and request.format.html?
+          session["#{scope}_return_to"] = request.original_fullpath if request.get?
+          redirect_to two_factor_authentication_path_for(scope)
+        else
+          render nothing: true, status: :unauthorized
         end
 
         def two_factor_authentication_path_for(resource_or_scope = nil)
@@ -45,7 +41,16 @@ module TwoFactorAuthentication
         def valid_tfa_cookie?
           tfa_cookie && tfa_cookie.present?
         end
+    end
+  end
+end
 
+module Devise
+  module Controllers
+    module Helpers
+      def is_fully_authenticated?
+        !session["warden.user.user.session"].try(:[], TwoFactorAuthentication::NEED_AUTHENTICATION)
+      end
     end
   end
 end

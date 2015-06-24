@@ -7,10 +7,11 @@ class Devise::TwoFactorAuthenticationController < DeviseController
 
   def update
     render :show and return if params[:code].nil?
-    md5 = Digest::MD5.hexdigest(params[:code])
-    if md5.eql?(resource.second_factor_pass_code)
-      warden.session(resource_name)[:need_two_factor_authentication] = false
+
+    if resource.authenticate_otp(params[:code])
+      warden.session(resource_name)[TwoFactorAuthentication::NEED_AUTHENTICATION] = false
       sign_in resource_name, resource, :bypass => true
+      set_flash_message :notice, :success
       redirect_to stored_location_for(resource_name) || :root
       #add remembered cookie
       resource.tfa_remember!
@@ -19,10 +20,10 @@ class Devise::TwoFactorAuthenticationController < DeviseController
     else
       resource.second_factor_attempts_count += 1
       resource.save
-      set_flash_message :error, :attempt_failed
+      flash.now[:error] = find_message(:attempt_failed)
       if resource.max_login_attempts?
         sign_out(resource)
-        render :template => 'devise/two_factor_authentication/max_login_attempts_reached' and return
+        render :max_login_attempts_reached
       else
         render :show
       end
@@ -45,10 +46,10 @@ class Devise::TwoFactorAuthenticationController < DeviseController
 
     def prepare_and_validate
       redirect_to :root and return if resource.nil?
-      @limit = resource.class.max_login_attempts
+      @limit = resource.max_login_attempts
       if resource.max_login_attempts?
         sign_out(resource)
-        render :template => 'devise/two_factor_authentication/max_login_attempts_reached' and return
+        render :max_login_attempts_reached and return
       end
     end
 end
